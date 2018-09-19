@@ -67,6 +67,6 @@ const cliArgv = minimist(process.argv.slice(2));
 
 runCLI(cliArgv)
   .then(() => {
-    logRespectfully(argv, '🌐 ✅');
+    logRespectfully(cliArgv, '🌐 ✅');
   })
   .catch(console.error);

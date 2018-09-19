@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const pathJoin = require('path').join;
 const spawn = require('@expo/spawn-async');
 const { syncAllPackages } = require('./utils');
+const yaml = require('js-yaml');
 
 const protoPath = pathJoin(__dirname, '../proto/web');
 
@@ -37,6 +38,17 @@ const start = async ({ appName, appPkg, location, globeDir }) => {
 };
 
 const deploy = async ({ appName, appPkg, location, globeDir }) => {
+  const appYamlPath = pathJoin(location, 'app.yaml');
+  const appConfig = yaml.safeLoad(await fs.readFile(appYamlPath));
+  const newAppConfig = {
+    ...appConfig,
+    env_variables: {
+      ...appConfig.env_variables,
+      APP_CONFIG_JSON: JSON.stringify({ foo: 'bar' }),
+    },
+  };
+  console.log('deploying with conifg', appConfig);
+  await fs.writeFile(appYamlPath, yaml.safeDump(newAppConfig));
   await spawn('gcloud', ['app', 'deploy', '-q'], {
     cwd: location,
     stdio: 'inherit',
@@ -46,7 +58,10 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
 
 const build = async ({ appName, appPkg, location, globeDir }) => {
   await sync({ appName, appPkg, location, globeDir });
-  await spawn('yarn', ['build-dev'], { cwd: location, stdio: 'inherit' });
+  await spawn('yarn', ['build-dev'], {
+    cwd: location,
+    stdio: 'inherit',
+  });
   const buildLocation = pathJoin(location, 'build');
   return { buildLocation };
 };
