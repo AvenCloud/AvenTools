@@ -35,6 +35,7 @@ const runCLI = async argv => {
       logRespectfully(argv, '🌐 Globe Start 🛠 ');
       const result = await runStart(argv);
       logResult(result);
+      return;
     }
     case 'build': {
       logRespectfully(argv, '🌐 Globe Build 🗜');
