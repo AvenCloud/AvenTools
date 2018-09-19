@@ -23,6 +23,18 @@ const sync = async ({ appName, appPkg, location, globeDir }) => {
     export default Client;`;
   await fs.writeFile(clientAppPath, clientAppFileData);
 
+  const distPkgTemplatePath = pathJoin(location, 'package.template.json');
+  const distPkgPath = pathJoin(location, 'package.json');
+  const distPkgTemplate = JSON.parse(await fs.readFile(distPkgTemplatePath));
+  const distPkg = {
+    ...distPkgTemplate,
+    dependencies: {
+      ...distPkgTemplate.dependencies,
+      ...appPkg.dependencies,
+    },
+  };
+  await fs.writeFile(distPkgPath, JSON.stringify(distPkg, null, 2));
+
   await spawn('yarn', { cwd: location, stdio: 'inherit' });
   return {};
 };

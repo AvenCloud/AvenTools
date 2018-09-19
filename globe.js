@@ -65,21 +65,26 @@ const changeAppState = async (appName, transactor) => {
     },
   });
 };
-
+const initLocation = async (appName, appPkg, platform, appState) => {
+  const newLocation = pathJoin(homeDir, '.globe', appName + '_' + uuid());
+  await fs.mkdirp(newLocation);
+  await platform.init({
+    globeDir,
+    appName,
+    appPkg,
+    location: newLocation,
+  });
+  return {
+    location: newLocation,
+    ...appState,
+  };
+};
 const getAppLocation = async (appName, appPkg, platform, appState) => {
   if (!appState || !appState.location) {
-    const newLocation = pathJoin(homeDir, '.globe', appName + '_' + uuid());
-    await fs.mkdirp(newLocation);
-    await platform.init({
-      globeDir,
-      appName,
-      appPkg,
-      location: newLocation,
-    });
-    return {
-      location: newLocation,
-      ...appState,
-    };
+    return initLocation(appName, appPkg, platform, appState);
+  }
+  if (!(await fs.exists(appState.location))) {
+    return initLocation(appName, appPkg, platform, appState);
   }
   return appState;
 };
