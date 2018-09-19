@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const minimist = require('minimist');
 const { runClear, runStart, runBuild, runDeploy } = require('./globe');
 
