@@ -1,0 +1,16 @@
+{
+  "name": "@aven-cloud/globe-tools",
+  "version": "0.1.0",
+  "main": "globe.js",
+  "bin": {
+    "globe": "cli.js"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@expo/spawn-async": "^1.3.0",
+    "fs-extra": "^7.0.0",
+    "minimist": "^1.2.0",
+    "sane": "^3.0.0",
+    "uuid": "^3.3.2"
+  }
+}
