@@ -54,6 +54,7 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
   const appConfig = yaml.safeLoad(await fs.readFile(appYamlPath));
   const publicConfig = { _configType: 'public' };
   const secretConfig = { _configType: 'secret' };
+  console.log('build env vars', process.env);
   if (appPkg && appPkg.globe && appPkg.globe.publicBuildConfigVars) {
     appPkg.globe.publicBuildConfigVars.forEach(varName => {
       publicConfig[varName] = process.env[varName];
@@ -72,6 +73,7 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
       SECRET_CONFIG_JSON: JSON.stringify(secretConfig),
     },
   };
+  console.log('app config yaml: ', newAppConfig);
   await fs.writeFile(appYamlPath, yaml.safeDump(newAppConfig));
   await spawn('gcloud', ['app', 'deploy', '-q'], {
     cwd: location,
