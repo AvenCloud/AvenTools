@@ -73,6 +73,9 @@ const build = async ({ appName, appPkg, location, globeDir }) => {
   await spawn('yarn', ['build-dev'], {
     cwd: location,
     stdio: 'inherit',
+    env: {
+      CI: false,
+    },
   });
   const buildLocation = pathJoin(location, 'build');
   return { buildLocation };
