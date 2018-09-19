@@ -210,7 +210,6 @@ const runDeploy = async argv => {
     location: buildLocation,
   });
 
-  console.log('deploying at ', buildLocation);
   return { buildLocation };
 };
 const runClear = async () => {

@@ -34,19 +34,19 @@ const runCLI = async argv => {
     case 'start': {
       logRespectfully(argv, '🌐 Globe Start 🛠 ');
       const result = await runStart(argv);
-      logResult(result);
+      logResult(argv, result);
       return;
     }
     case 'build': {
       logRespectfully(argv, '🌐 Globe Build 🗜');
       const result = await runBuild(argv);
-      logResult(result);
+      logResult(argv, result);
       return;
     }
     case 'deploy': {
       logRespectfully(argv, '🌐 Globe Deploy 🚀');
       const result = await runDeploy(argv);
-      logResult(result);
+      logResult(argv, result);
       return;
     }
     case 'test': {
