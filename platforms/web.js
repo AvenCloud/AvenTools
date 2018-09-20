@@ -72,6 +72,10 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
       SECRET_CONFIG_JSON: JSON.stringify(secretConfig),
     },
   };
+  if (secretConfig.SQL_INSTANCE_CONNECTION_NAME) {
+    beta_settings.cloud_sql_instances =
+      secretConfig.SQL_INSTANCE_CONNECTION_NAME;
+  }
   await fs.writeFile(appYamlPath, yaml.safeDump(newAppConfig));
   await spawn('gcloud', ['app', 'deploy', '-q'], {
     cwd: location,

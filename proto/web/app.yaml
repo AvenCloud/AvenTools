@@ -8,6 +8,3 @@ automatic_scaling:
     target_utilization: 0.6
 env_variables:
   APP_SERVER_PORT: 8080
-  PUBLIC_SECRET_EXAMPLE: 'MONKEY'
-beta_settings:
-  cloud_sql_instances: ono-prod-216722:us-west2:ono-data
