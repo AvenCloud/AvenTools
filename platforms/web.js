@@ -87,7 +87,7 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
 
 const build = async ({ appName, appPkg, location, globeDir }) => {
   await sync({ appName, appPkg, location, globeDir });
-  const buildResult = await spawn('yarn', ['build-dev'], {
+  const buildResult = await spawn('npx', ['razzle', 'build'], {
     cwd: location,
     stdio: 'inherit',
     env: {

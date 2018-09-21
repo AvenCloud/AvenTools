@@ -5,7 +5,6 @@
   "scripts": {
     "start": "NODE_ENV=production node build/server.js",
     "start-dev": "razzle start",
-    "build-dev": "razzle build",
     "test": "razzle test --env=jsdom"
   },
   "engines": {
