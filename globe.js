@@ -123,6 +123,7 @@ const runStart = async argv => {
   const watcher = sane(globeDir, { watchman: true });
 
   watcher.on('change', async (filepath, root, stat) => {
+    console.log('change at ', filePath);
     await goSync();
   });
   watcher.on('add', async (filepath, root, stat) => {

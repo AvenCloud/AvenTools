@@ -21,7 +21,13 @@ const getGlobePackages = async globeDir => {
 const syncPackage = async (packageName, globeDir, destLocation) => {
   const workspacePackage = pathJoin(globeDir, packageName);
   const destPackage = pathJoin(destLocation, packageName);
-  await spawn('rsync', ['-a', workspacePackage + '/', destPackage]);
+  await spawn('rsync', [
+    '-a',
+    '--exclude',
+    'node_modules*',
+    workspacePackage + '/',
+    destPackage + '/',
+  ]);
 };
 
 const syncAllPackages = async (globeDir, destLocation) => {
