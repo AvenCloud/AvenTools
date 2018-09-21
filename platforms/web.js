@@ -87,13 +87,14 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
 
 const build = async ({ appName, appPkg, location, globeDir }) => {
   await sync({ appName, appPkg, location, globeDir });
-  await spawn('yarn', ['build-dev'], {
+  const buildResult = await spawn('yarn', ['build-dev'], {
     cwd: location,
     stdio: 'inherit',
     env: {
       CI: false,
     },
   });
+  console.log('Observed buildResult', buildResult);
   const buildLocation = pathJoin(location, 'build');
   return { buildLocation };
 };
