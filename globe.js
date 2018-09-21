@@ -123,14 +123,31 @@ const runStart = async argv => {
   const watcher = sane(globeDir, { watchman: true });
 
   watcher.on('change', async (filepath, root, stat) => {
-    console.log('change at ', filePath);
-    await goSync();
+    try {
+      await goSync();
+    } catch (e) {
+      console.log('ERROR after file change sync');
+      console.error(e);
+      process.exit(1);
+    }
   });
   watcher.on('add', async (filepath, root, stat) => {
-    await goSync();
+    try {
+      await goSync();
+    } catch (e) {
+      console.log('ERROR after file add sync');
+      console.error(e);
+      process.exit(1);
+    }
   });
   watcher.on('delete', async (filepath, root) => {
-    await goSync();
+    try {
+      await goSync();
+    } catch (e) {
+      console.log('ERROR after file delete sync');
+      console.error(e);
+      process.exit(1);
+    }
   });
   await new Promise(resolve => {
     watcher.on('ready', () => {
