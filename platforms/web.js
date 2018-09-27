@@ -1,31 +1,91 @@
 const fs = require('fs-extra');
 const pathJoin = require('path').join;
 const spawn = require('@expo/spawn-async');
-const { syncAllPackages } = require('./utils');
+const { syncAllPackages, syncPackage } = require('./utils');
 const yaml = require('js-yaml');
 
 const protoPath = pathJoin(__dirname, '../proto/web');
 
-const sync = async ({ appName, appPkg, location, globeDir }) => {
-  await syncAllPackages(globeDir, pathJoin(location, 'src'));
+const getAllGlobeDependencies = async (globeDir, packageName) => {
+  const packageDir = pathJoin(globeDir, packageName);
+  const packageJSONPath = pathJoin(packageDir, 'package.json');
+  const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
+  const pkgDeps = (pkgJSON.globe && pkgJSON.globe.globeDependencies) || [];
+  const childPkgDeps = await Promise.all(
+    pkgDeps.map(async pkgDep => {
+      return await getAllGlobeDependencies(globeDir, pkgDep);
+    }),
+  );
+  const allPkgDeps = new Set(pkgDeps);
+  allPkgDeps.add(packageName);
+  childPkgDeps.forEach(cPkgDeps =>
+    cPkgDeps.forEach(cPkgDep => allPkgDeps.add(cPkgDep)),
+  );
+  return allPkgDeps;
+};
 
-  const serverAppPath = pathJoin(location, 'src/server.js');
+const getAllModuleDependencies = async (globeDir, packageName) => {
+  const packageDir = pathJoin(globeDir, packageName);
+  const packageJSONPath = pathJoin(packageDir, 'package.json');
+  const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
+  const pkgDeps = (pkgJSON.globe && pkgJSON.globe.globeDependencies) || [];
+  const moduleDeps = (pkgJSON.globe && pkgJSON.globe.moduleDependencies) || [];
+  const childPkgDeps = await Promise.all(
+    pkgDeps.map(async pkgDep => {
+      return await getAllModuleDependencies(globeDir, pkgDep);
+    }),
+  );
+  const allModuleDeps = new Set(moduleDeps);
+  childPkgDeps.forEach(cPkgDeps =>
+    cPkgDeps.forEach(cPkgDep => allModuleDeps.add(cPkgDep)),
+  );
+  return allModuleDeps;
+};
+
+// packageSourceDir = (location) => pathJoin(location, 'src', 'sync');
+
+const sync = async ({ appName, appPkg, location, globeDir }) => {
+  const packageSourceDir = pathJoin(location, 'src', 'sync');
+  await fs.mkdirp(packageSourceDir);
+  const existingDirs = await fs.readdir(packageSourceDir);
+
+  const allGlobeDeps = await getAllGlobeDependencies(globeDir, appName);
+  await Promise.all(
+    existingDirs
+      .filter(testPkgName => !allGlobeDeps.has(testPkgName))
+      .map(async pkgToRemove => {
+        const pkgToRemovePath = pathJoin(packageSourceDir, pkgToRemove);
+        await fs.remove(pkgToRemovePath);
+      }),
+  );
+  await Promise.all(
+    Array.from(allGlobeDeps).map(async globeDep => {
+      await syncPackage(globeDep, globeDir, packageSourceDir);
+    }),
+  );
+
+  const serverAppPath = pathJoin(location, 'src', 'server.js');
   const serverAppFileData = `
-    import Server from './${appName}/${appPkg.globe.envOptions.mainServer}';
-    
-    export default Server;`;
+import Server from './sync/${appName}/${appPkg.globe.envOptions.mainServer}';
+
+export default Server;
+`;
   await fs.writeFile(serverAppPath, serverAppFileData);
 
-  const clientAppPath = pathJoin(location, 'src/client.js');
+  const clientAppPath = pathJoin(location, 'src', 'client.js');
   const clientAppFileData = `
-    import Client from './${appName}/${appPkg.globe.envOptions.mainClient}';
-    
-    export default Client;`;
+import startClient from './sync/${appName}/${
+    appPkg.globe.envOptions.mainClient
+  }';
+
+startClient();
+`;
   await fs.writeFile(clientAppPath, clientAppFileData);
 
   const distPkgTemplatePath = pathJoin(location, 'package.template.json');
   const distPkgPath = pathJoin(location, 'package.json');
   const distPkgTemplate = JSON.parse(await fs.readFile(distPkgTemplatePath));
+
   const distPkg = {
     ...distPkgTemplate,
     dependencies: {
@@ -33,6 +93,19 @@ const sync = async ({ appName, appPkg, location, globeDir }) => {
       ...appPkg.dependencies,
     },
   };
+  const globePkg = JSON.parse(
+    await fs.readFile(pathJoin(globeDir, 'package.json')),
+  );
+  Array.from(await getAllModuleDependencies(globeDir, appName)).forEach(
+    moduleDep => {
+      if (globePkg.dependencies[moduleDep] == null) {
+        throw new Error(
+          `Cannot find dependency "${moduleDep}" inside package.json for globe at ${globeDir}`,
+        );
+      }
+      distPkg.dependencies[moduleDep] = globePkg.dependencies[moduleDep];
+    },
+  );
   await fs.writeFile(distPkgPath, JSON.stringify(distPkg, null, 2));
 
   await spawn('yarn', { cwd: location, stdio: 'inherit' });

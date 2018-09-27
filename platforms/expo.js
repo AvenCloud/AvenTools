@@ -57,7 +57,11 @@ const sync = async ({ appName, appPkg, location, globeDir }) => {
 };
 
 const init = async ({ appName, appPkg, location, globeDir }) => {
+  console.log('WOAH');
+  await fs.mkdirp(location);
+  console.log('WOAHB');
   await fs.copy(pathJoin(protoPath), location);
+  console.log('WOAHC', location);
 };
 
 const start = async ({ appName, appPkg, location, globeDir }) => {

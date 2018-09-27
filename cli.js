@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const minimist = require('minimist');
-const { runClear, runStart, runBuild, runDeploy } = require('./globe');
+const { runClean, runStart, runBuild, runDeploy } = require('./globe');
 
 const logRespectfully = (argv, logStr) => {
   if (!argv.q) {
@@ -23,13 +23,13 @@ const logResult = (argv, result, successMessage) => {
 const runCLI = async argv => {
   const command = argv._[0];
   switch (command) {
-    case 'clear': {
-      logRespectfully(argv, '🌐 Globe Clear 🔥');
+    case 'clean': {
+      logRespectfully(argv, '🌐 Globe Clean 🔥');
       logRespectfully(
         argv,
-        'Clearing all globe apps and state. This will not touch your working directory.',
+        'Cleaning all globe apps and state. This will not touch your working directory, except for the local .globe.state.json file, which should be ignored by git.',
       );
-      return runClear(argv);
+      return runClean(argv);
     }
     case 'start': {
       logRespectfully(argv, '🌐 Globe Start 🛠 ');

@@ -19,21 +19,27 @@ const getGlobePackages = async globeDir => {
 };
 
 const syncPackage = async (packageName, globeDir, destLocation) => {
+  console.log(`Syncing package ${packageName} to ${destLocation}`);
   const workspacePackage = pathJoin(globeDir, packageName);
   const destPackage = pathJoin(destLocation, packageName);
   await spawn('rsync', [
     '-a',
     '--exclude',
     'node_modules*',
+    '--exclude',
+    'src-sync*',
     workspacePackage + '/',
     destPackage + '/',
   ]);
 };
 
-const syncAllPackages = async (globeDir, destLocation) => {
+const syncAllPackages = async (globeDir, destLocation, denyPackageNames) => {
   const globePackages = await getGlobePackages(globeDir);
   await Promise.all(
     globePackages.map(async globePackage => {
+      if (denyPackageNames && denyPackageNames.has(globePackage)) {
+        return;
+      }
       await syncPackage(globePackage, globeDir, destLocation);
     }),
   );
@@ -41,4 +47,5 @@ const syncAllPackages = async (globeDir, destLocation) => {
 
 module.exports = {
   syncAllPackages,
+  syncPackage,
 };
