@@ -4,7 +4,7 @@ const uuid = require('uuid/v1');
 const sane = require('sane');
 const homeDir = require('os').homedir();
 const spawn = require('@expo/spawn-async');
-const { syncAllPackages, syncPackage } = require('./platforms/utils');
+const { syncAllPackages, syncPackage } = require('./utils');
 
 const globeDir = process.cwd();
 const globeHomeDir = pathJoin(homeDir, '.globe');
@@ -81,9 +81,9 @@ const selfPlatform = {
 };
 
 const globeEnvs = {
-  dom: require('./platforms/dom.js'),
-  expo: require('./platforms/expo.js'),
-  web: require('./platforms/web.js'),
+  dom: require('./dom'),
+  expo: require('./expo'),
+  web: require('./web'),
   self: selfPlatform,
 };
 
