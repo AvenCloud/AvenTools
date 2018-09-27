@@ -5,13 +5,20 @@ const { syncAllPackages } = require('./utils');
 
 const protoPath = pathJoin(__dirname, '../proto/expo');
 
-const sync = async ({ appName, appPkg, location, globeDir }) => {
-  await syncAllPackages(globeDir, location);
+const getPackageSourceDir = location => pathJoin(location, 'src-sync');
+
+const getTemplatePkg = async () => {
+  const pkgPath = pathJoin(protoPath, 'package.template.json');
+  const pkg = JSON.parse(await fs.readFile(pkgPath));
+  return pkg;
+};
+
+const applyPackage = async ({ location, appName, appPkg, distPkg }) => {
   const appPath = pathJoin(location, 'App.js');
   const mainAppFileData = `
-    import App from './${appName}/${appPkg.main}';
-    
-    export default App;`;
+import App from './src-sync/${appName}/${appPkg.main}';
+
+export default App;`;
   await fs.writeFile(appPath, mainAppFileData);
   const defaultExpoConfig = {
     name: 'app',
@@ -41,27 +48,14 @@ const sync = async ({ appName, appPkg, location, globeDir }) => {
   const appJsonData = JSON.stringify({ expo: expoConfig }, null, 2);
   await fs.writeFile(pathJoin(location, 'app.json'), appJsonData);
 
-  const distPkgTemplatePath = pathJoin(location, 'package.template.json');
   const distPkgPath = pathJoin(location, 'package.json');
-  const distPkgTemplate = JSON.parse(await fs.readFile(distPkgTemplatePath));
-  const distPkg = {
-    ...distPkgTemplate,
-    dependencies: {
-      ...distPkgTemplate.dependencies,
-      ...appPkg.dependencies,
-    },
-  };
   await fs.writeFile(distPkgPath, JSON.stringify(distPkg, null, 2));
 
   await spawn('yarn', { cwd: location, stdio: 'inherit' });
 };
 
 const init = async ({ appName, appPkg, location, globeDir }) => {
-  console.log('WOAH');
-  await fs.mkdirp(location);
-  console.log('WOAHB');
   await fs.copy(pathJoin(protoPath), location);
-  console.log('WOAHC', location);
 };
 
 const start = async ({ appName, appPkg, location, globeDir }) => {
@@ -72,5 +66,7 @@ const start = async ({ appName, appPkg, location, globeDir }) => {
 module.exports = {
   init,
   start,
-  sync,
+  getTemplatePkg,
+  applyPackage,
+  getPackageSourceDir,
 };

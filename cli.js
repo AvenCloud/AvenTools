@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const minimist = require('minimist');
-const { runClean, runStart, runBuild, runDeploy } = require('./globe');
+const { runClean, runStart, runBuild, runDeploy } = require('./src/globe');
 
 const logRespectfully = (argv, logStr) => {
   if (!argv.q) {
@@ -40,13 +40,17 @@ const runCLI = async argv => {
     case 'build': {
       logRespectfully(argv, '🌐 Globe Build 🗜');
       const result = await runBuild(argv);
-      logResult(argv, result);
+      logResult(
+        argv,
+        result,
+        `🌐 Globe Build Complete 🗜 ${result.buildLocation}`,
+      );
       return;
     }
     case 'deploy': {
       logRespectfully(argv, '🌐 Globe Deploy 🚀');
       const result = await runDeploy(argv);
-      logResult(argv, result);
+      logResult(argv, result, '');
       return;
     }
     case 'test': {
