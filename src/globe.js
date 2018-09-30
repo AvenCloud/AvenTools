@@ -46,45 +46,10 @@ const getAllModuleDependencies = async (globeDir, packageName) => {
   return allModuleDeps;
 };
 
-const runPlatformCommand = async (cwd, cmdName) => {
-  await spawn('yarn', ['globe:' + cmdName], {
-    cwd,
-    stdio: 'inherit',
-  });
-};
-const selfPlatform = {
-  applyPackage: async ({ location, appName, globeDir, distPkg }) => {
-    const distPkgPath = pathJoin(location, 'package.json');
-    await fs.writeFile(distPkgPath, JSON.stringify(distPkg, null, 2));
-
-    await spawn('yarn', [], {
-      cwd: location,
-      stdio: 'inherit',
-    });
-  },
-  getPackageSourceDir: location => pathJoin(location, 'src-sync'),
-  getTemplatePkg: async location => {
-    const pkgPath = pathJoin(location, 'package.template.json');
-    const pkg = JSON.parse(await fs.readFile(pkgPath));
-    return pkg;
-  },
-  start: async ({ location }) => {
-    await runPlatformCommand(location, 'start');
-  },
-  build: async ({ location }) => {
-    await runPlatformCommand(location, 'build');
-  },
-  deploy: async ({ location }) => {
-    await runPlatformCommand(location, 'deploy');
-  },
-  runInPlace: true,
-};
-
 const globeEnvs = {
   dom: require('./dom'),
   expo: require('./expo'),
   web: require('./web'),
-  self: selfPlatform,
 };
 
 const getAppPackage = async appName => {
@@ -101,11 +66,17 @@ const getAppPackage = async appName => {
 
 const getAppEnv = async (appName, appPkg) => {
   const envName = appPkg && appPkg.globe && appPkg.globe.env;
-  const envModule = globeEnvs[envName];
+  let envModule = globeEnvs[envName];
   if (!envModule) {
-    throw new Error(
-      `Failed to load platform env "${envName}" as specified in package.json globe.env for "${appName}"`,
-    );
+    const envPath = pathJoin(globeDir, envName);
+    if (!(await fs.exists(envPath))) {
+      throw new Error(
+        `Failed to load platform env "${envName}" as specified in package.json globe.env for "${appName}"`,
+      );
+    }
+    envModule = require(pathJoin(envPath, 'GlobeEnv.js'));
+    envModule.localGlobeEnv = envName;
+    console.log('APP ENV READ ', envPath);
   }
   envModule.name = envName;
   return envModule;
@@ -161,7 +132,7 @@ const initLocation = async (appName, appPkg, platform, appState) => {
 };
 const getAppLocation = async (appName, appPkg, platform, appState) => {
   if (platform.runInPlace) {
-    return { ...appState, location: pathJoin(globeDir, appName) };
+    return { ...appState, location: pathJoin(globeDir, platform.name) };
   }
   if (!appState || !appState.location) {
     return await initLocation(appName, appPkg, platform, appState);
@@ -179,17 +150,18 @@ const sync = async (appEnv, location, appName, appPkg, globeDir) => {
 
   const existingDirs = await fs.readdir(packageSourceDir);
 
-  const allGlobeDeps = await getAllGlobeDependencies(globeDir, appName);
+  const globeDepsSet = await getAllGlobeDependencies(globeDir, appName);
+  const globeDeps = Array.from(globeDepsSet);
   await Promise.all(
     existingDirs
-      .filter(testPkgName => !allGlobeDeps.has(testPkgName))
+      .filter(testPkgName => !globeDepsSet.has(testPkgName))
       .map(async pkgToRemove => {
         const pkgToRemovePath = pathJoin(packageSourceDir, pkgToRemove);
         await fs.remove(pkgToRemovePath);
       }),
   );
   await Promise.all(
-    Array.from(allGlobeDeps).map(async globeDep => {
+    globeDeps.map(async globeDep => {
       await syncPackage(globeDep, globeDir, packageSourceDir);
     }),
   );
@@ -223,6 +195,8 @@ const sync = async (appEnv, location, appName, appPkg, globeDir) => {
     appPkg,
     distPkg,
   });
+
+  return { globeDeps };
 };
 
 const runStart = async argv => {
@@ -239,7 +213,7 @@ const runStart = async argv => {
         appState.location
       }`,
     );
-    await sync(appEnv, appState.location, appName, appPkg, globeDir);
+    return await sync(appEnv, appState.location, appName, appPkg, globeDir);
   };
   await writeGlobeState({
     ...state,
@@ -249,19 +223,38 @@ const runStart = async argv => {
       [appName]: appState,
     },
   });
-  await goSync();
+  let syncState = await goSync();
 
   const watcher = sane(globeDir, { watchman: true });
 
   let syncTimeout = null;
   const scheduleSync = (filepath, root, stat) => {
+    if (
+      appEnv.localGlobeEnv &&
+      filepath.substr(0, appEnv.localGlobeEnv.length) === appEnv.localGlobeEnv
+    ) {
+      return;
+    }
+    let shouldSync = false;
+    for (let globeDep in syncState.globeDeps) {
+      if (filepath.substr(0, globeDep.length) === globeDep) {
+        shouldSync = true;
+      }
+    }
+    if (!shouldSync) {
+      return;
+    }
     clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
-      goSync().catch(e => {
-        console.log('ERROR after file change sync');
-        console.error(e);
-        process.exit(1);
-      });
+      goSync()
+        .then(s => {
+          syncState = s;
+        })
+        .catch(e => {
+          console.log('ERROR after file change sync');
+          console.error(e);
+          process.exit(1);
+        });
     }, 25);
   };
   watcher.on('change', scheduleSync);
