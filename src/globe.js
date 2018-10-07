@@ -76,7 +76,6 @@ const getAppEnv = async (appName, appPkg) => {
     }
     envModule = require(pathJoin(envPath, 'GlobeEnv.js'));
     envModule.localGlobeEnv = envName;
-    console.log('APP ENV READ ', envPath);
   }
   envModule.name = envName;
   return envModule;
@@ -236,7 +235,7 @@ const runStart = async argv => {
       return;
     }
     let shouldSync = false;
-    for (let globeDep in syncState.globeDeps) {
+    for (let globeDep of syncState.globeDeps) {
       if (filepath.substr(0, globeDep.length) === globeDep) {
         shouldSync = true;
       }
