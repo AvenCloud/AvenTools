@@ -1,7 +1,6 @@
 const fs = require('fs-extra');
 const pathJoin = require('path').join;
 const spawn = require('@expo/spawn-async');
-const { syncAllPackages } = require('./utils');
 
 const protoPath = pathJoin(__dirname, '../proto/expo');
 

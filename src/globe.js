@@ -4,20 +4,53 @@ const uuid = require('uuid/v1');
 const sane = require('sane');
 const homeDir = require('os').homedir();
 const spawn = require('@expo/spawn-async');
-const { syncAllPackages, syncPackage } = require('./utils');
 
 const globeDir = process.cwd();
 const globeHomeDir = pathJoin(homeDir, '.globe');
 const globeStatePath = pathJoin(globeDir, '.globe.state.json');
 
-const getAllGlobeDependencies = async (globeDir, packageName) => {
-  const packageDir = pathJoin(globeDir, packageName);
+const extendOverride = process.env.GLOBE_LOCAL_EXTEND_OVERRIDE;
+if (extendOverride) {
+  console.log(
+    `⚠️ - Using globe extendsGlobeModule from process.env.GLOBE_LOCAL_EXTEND_OVERRIDE (${extendOverride}). You are responsible for syncronization of the extended globe dir!`,
+  );
+}
+
+const getPackageDir = async (globeDir, packageName, globePkg) => {
+  const extendsGlobeModule =
+    globePkg && globePkg.globe && globePkg.globe.extendsGlobeModule;
+  let packageDir = pathJoin(globeDir, packageName);
+  if (!(await fs.existsSync(packageDir)) && extendsGlobeModule) {
+    const extendsGlobeDir =
+      extendOverride || pathJoin(globeDir, 'node_modules', extendsGlobeModule);
+    const extendsPkgDir = pathJoin(extendsGlobeDir, packageName);
+    packageDir = extendsPkgDir;
+  }
+  return packageDir;
+};
+
+const syncPackage = async (packageName, globeDir, destLocation, globePkg) => {
+  const packageDir = await getPackageDir(globeDir, packageName, globePkg);
+  const destPackage = pathJoin(destLocation, packageName);
+  await spawn('rsync', [
+    '-a',
+    '--exclude',
+    'node_modules*',
+    '--exclude',
+    'src-sync*',
+    packageDir + '/',
+    destPackage + '/',
+  ]);
+};
+
+const getAllGlobeDependencies = async (globeDir, packageName, globePkg) => {
+  const packageDir = await getPackageDir(globeDir, packageName, globePkg);
   const packageJSONPath = pathJoin(packageDir, 'package.json');
   const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
   const pkgDeps = (pkgJSON.globe && pkgJSON.globe.globeDependencies) || [];
   const childPkgDeps = await Promise.all(
     pkgDeps.map(async pkgDep => {
-      return await getAllGlobeDependencies(globeDir, pkgDep);
+      return await getAllGlobeDependencies(globeDir, pkgDep, globePkg);
     }),
   );
   const allPkgDeps = new Set(pkgDeps);
@@ -28,15 +61,16 @@ const getAllGlobeDependencies = async (globeDir, packageName) => {
   return allPkgDeps;
 };
 
-const getAllModuleDependencies = async (globeDir, packageName) => {
-  const packageDir = pathJoin(globeDir, packageName);
+const getAllModuleDependencies = async (globeDir, packageName, globePkg) => {
+  const packageDir = await getPackageDir(globeDir, packageName, globePkg);
+
   const packageJSONPath = pathJoin(packageDir, 'package.json');
   const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
   const pkgDeps = (pkgJSON.globe && pkgJSON.globe.globeDependencies) || [];
   const moduleDeps = (pkgJSON.globe && pkgJSON.globe.moduleDependencies) || [];
   const childPkgDeps = await Promise.all(
     pkgDeps.map(async pkgDep => {
-      return await getAllModuleDependencies(globeDir, pkgDep);
+      return await getAllModuleDependencies(globeDir, pkgDep, globePkg);
     }),
   );
   const allModuleDeps = new Set(moduleDeps);
@@ -103,18 +137,6 @@ const writeGlobeState = async state => {
   await fs.writeFile(globeStatePath, stateData);
 };
 
-const changeAppState = async (appName, transactor) => {
-  const state = await readGlobeState();
-  let lastAppState = state.apps && state.apps[appName];
-  await writeGlobeState({
-    ...state,
-    globeDir,
-    apps: {
-      ...state.apps,
-      [appName]: transactor(lastAppState || {}),
-    },
-  });
-};
 const initLocation = async (appName, appPkg, platform, appState) => {
   const newLocation = pathJoin(homeDir, '.globe', appName + '_' + uuid());
   await fs.mkdirp(newLocation);
@@ -144,12 +166,18 @@ const getAppLocation = async (appName, appPkg, platform, appState) => {
 
 const sync = async (appEnv, location, appName, appPkg, globeDir) => {
   const packageSourceDir = appEnv.getPackageSourceDir(location);
-
+  const globePkg = JSON.parse(
+    await fs.readFile(pathJoin(globeDir, 'package.json')),
+  );
   await fs.mkdirp(packageSourceDir);
 
   const existingDirs = await fs.readdir(packageSourceDir);
 
-  const globeDepsSet = await getAllGlobeDependencies(globeDir, appName);
+  const globeDepsSet = await getAllGlobeDependencies(
+    globeDir,
+    appName,
+    globePkg,
+  );
   const globeDeps = Array.from(globeDepsSet);
   await Promise.all(
     existingDirs
@@ -161,7 +189,7 @@ const sync = async (appEnv, location, appName, appPkg, globeDir) => {
   );
   await Promise.all(
     globeDeps.map(async globeDep => {
-      await syncPackage(globeDep, globeDir, packageSourceDir);
+      await syncPackage(globeDep, globeDir, packageSourceDir, globePkg);
     }),
   );
 
@@ -174,19 +202,17 @@ const sync = async (appEnv, location, appName, appPkg, globeDir) => {
       ...appPkg.dependencies,
     },
   };
-  const globePkg = JSON.parse(
-    await fs.readFile(pathJoin(globeDir, 'package.json')),
-  );
-  Array.from(await getAllModuleDependencies(globeDir, appName)).forEach(
-    moduleDep => {
-      if (globePkg.dependencies[moduleDep] == null) {
-        throw new Error(
-          `Cannot find dependency "${moduleDep}" inside package.json for globe at ${globeDir}`,
-        );
-      }
-      distPkg.dependencies[moduleDep] = globePkg.dependencies[moduleDep];
-    },
-  );
+
+  Array.from(
+    await getAllModuleDependencies(globeDir, appName, globePkg),
+  ).forEach(moduleDep => {
+    if (globePkg.dependencies[moduleDep] == null) {
+      throw new Error(
+        `Cannot find dependency "${moduleDep}" inside package.json for globe at ${globeDir}`,
+      );
+    }
+    distPkg.dependencies[moduleDep] = globePkg.dependencies[moduleDep];
+  });
 
   await appEnv.applyPackage({
     location,
@@ -226,6 +252,9 @@ const runStart = async argv => {
 
   const watcher = sane(globeDir, { watchman: true });
 
+  let extendedGlobeWatcher =
+    extendOverride && sane(extendOverride, { watchman: true });
+
   let syncTimeout = null;
   const scheduleSync = (filepath, root, stat) => {
     if (
@@ -259,12 +288,30 @@ const runStart = async argv => {
   watcher.on('change', scheduleSync);
   watcher.on('add', scheduleSync);
   watcher.on('delete', scheduleSync);
-  await new Promise(resolve => {
-    watcher.on('ready', () => {
-      console.log(`🌐 👓 Watching ${globeDir} for changes`);
-      resolve();
-    });
-  });
+
+  extendedGlobeWatcher && extendedGlobeWatcher.on('change', scheduleSync);
+  extendedGlobeWatcher && extendedGlobeWatcher.on('add', scheduleSync);
+  extendedGlobeWatcher && extendedGlobeWatcher.on('delete', scheduleSync);
+
+  await Promise.all([
+    new Promise(resolve => {
+      watcher.on('ready', () => {
+        console.log(`🌐 👓 Watching ${globeDir} for changes`);
+        resolve();
+      });
+    }),
+    new Promise(resolve => {
+      if (!extendedGlobeWatcher) {
+        return resolve();
+      }
+      extendedGlobeWatcher.on('ready', () => {
+        console.log(
+          `🌐 👓 Watching extended globe dir ${extendOverride} for changes`,
+        );
+        resolve();
+      });
+    }),
+  ]);
 
   await appEnv.start({
     globeDir,
@@ -274,6 +321,7 @@ const runStart = async argv => {
   });
 
   watcher.close();
+  extendedGlobeWatcher && extendedGlobeWatcher.close();
 };
 
 const runBuild = async argv => {
