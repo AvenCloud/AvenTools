@@ -62,18 +62,22 @@ const getAllGlobeDependencies = async (globeDir, packageName, globePkg) => {
 };
 
 const getAllModuleDependencies = async (globeDir, packageName, globePkg) => {
-  const packageDir = await getPackageDir(globeDir, packageName, globePkg);
-
-  const packageJSONPath = pathJoin(packageDir, 'package.json');
-  const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
-  const pkgDeps = (pkgJSON.globe && pkgJSON.globe.globeDependencies) || [];
-  const moduleDeps = (pkgJSON.globe && pkgJSON.globe.moduleDependencies) || [];
+  const pkgDeps = await getAllGlobeDependencies(
+    globeDir,
+    packageName,
+    globePkg,
+  );
   const childPkgDeps = await Promise.all(
-    pkgDeps.map(async pkgDep => {
-      return await getAllModuleDependencies(globeDir, pkgDep, globePkg);
+    Array.from(pkgDeps).map(async pkgDep => {
+      const packageDir = await getPackageDir(globeDir, pkgDep, globePkg);
+      const packageJSONPath = pathJoin(packageDir, 'package.json');
+      const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
+      const moduleDeps =
+        (pkgJSON.globe && pkgJSON.globe.moduleDependencies) || [];
+      return moduleDeps;
     }),
   );
-  const allModuleDeps = new Set(moduleDeps);
+  const allModuleDeps = new Set();
   childPkgDeps.forEach(cPkgDeps =>
     cPkgDeps.forEach(cPkgDep => allModuleDeps.add(cPkgDep)),
   );
