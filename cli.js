@@ -43,7 +43,7 @@ const runCLI = async argv => {
       logResult(
         argv,
         result,
-        `🌐 Globe Build Complete 🗜 ${result.buildLocation}`,
+        `🌐 Globe Build Complete 🗜\n${result.buildLocation}`,
       );
       return;
     }

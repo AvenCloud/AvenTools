@@ -89,7 +89,11 @@ const getAllModuleDependencies = async (globeDir, packageName, globePkg) => {
       moduleDeps.forEach(moduleDepName => {
         if (!localGlobePkg.dependencies[moduleDepName]) {
           throw new Error(
-            'Cannot find ' + moduleDepName + ' in the globe package.json!',
+            'Cannot find ' +
+              moduleDepName +
+              ' in the globe package.json while requiring ' +
+              pkgDep +
+              '!',
           );
         }
         allModuleDeps[moduleDepName] =
