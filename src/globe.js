@@ -100,6 +100,28 @@ const getAllModuleDependencies = async (globeDir, packageName, globePkg) => {
   return allModuleDeps;
 };
 
+const getAllPublicAssetDirs = async (globeDir, packageName, globePkg) => {
+  const pkgDeps = await getAllGlobeDependencies(
+    globeDir,
+    packageName,
+    globePkg,
+  );
+  const allPublicAssetDirs = [];
+  await Promise.all(
+    Array.from(pkgDeps).map(async pkgDep => {
+      const { packageDir } = await getPackageDir(globeDir, pkgDep, globePkg);
+      const packageJSONPath = pathJoin(packageDir, 'package.json');
+      const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
+      if (pkgJSON.globe && pkgJSON.globe.publicAssetDir) {
+        allPublicAssetDirs.push(
+          pathJoin(packageDir, pkgJSON.globe.publicAssetDir),
+        );
+      }
+    }),
+  );
+  return allPublicAssetDirs;
+};
+
 const globeEnvs = {
   dom: require('./dom'),
   expo: require('./expo'),
@@ -230,7 +252,13 @@ const sync = async (appEnv, location, appName, appPkg, globeDir) => {
     },
   };
 
-  // publicAssetDir
+  const assetDirs = await getAllPublicAssetDirs(globeDir, appName, globePkg);
+  const destAssetDir = pathJoin(location, 'public');
+  await Promise.all(
+    assetDirs.map(async assetDir => {
+      await spawn('rsync', ['-a', assetDir + '/', destAssetDir + '/']);
+    }),
+  );
 
   await appEnv.applyPackage({
     location,
