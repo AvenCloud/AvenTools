@@ -20,17 +20,18 @@ const getPackageDir = async (globeDir, packageName, globePkg) => {
   const extendsGlobeModule =
     globePkg && globePkg.globe && globePkg.globe.extendsGlobeModule;
   let packageDir = pathJoin(globeDir, packageName);
+  let extendingGlobeDir = null;
   if (!(await fs.existsSync(packageDir)) && extendsGlobeModule) {
-    const extendsGlobeDir =
+    extendingGlobeDir =
       extendOverride || pathJoin(globeDir, 'node_modules', extendsGlobeModule);
-    const extendsPkgDir = pathJoin(extendsGlobeDir, packageName);
+    const extendsPkgDir = pathJoin(extendingGlobeDir, packageName);
     packageDir = extendsPkgDir;
   }
-  return packageDir;
+  return { packageDir, extendingGlobeDir };
 };
 
 const syncPackage = async (packageName, globeDir, destLocation, globePkg) => {
-  const packageDir = await getPackageDir(globeDir, packageName, globePkg);
+  const { packageDir } = await getPackageDir(globeDir, packageName, globePkg);
   const destPackage = pathJoin(destLocation, packageName);
   await spawn('rsync', [
     '-a',
@@ -44,7 +45,7 @@ const syncPackage = async (packageName, globeDir, destLocation, globePkg) => {
 };
 
 const getAllGlobeDependencies = async (globeDir, packageName, globePkg) => {
-  const packageDir = await getPackageDir(globeDir, packageName, globePkg);
+  const { packageDir } = await getPackageDir(globeDir, packageName, globePkg);
   const packageJSONPath = pathJoin(packageDir, 'package.json');
   const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
   const pkgDeps = (pkgJSON.globe && pkgJSON.globe.globeDependencies) || [];
@@ -67,19 +68,34 @@ const getAllModuleDependencies = async (globeDir, packageName, globePkg) => {
     packageName,
     globePkg,
   );
-  const childPkgDeps = await Promise.all(
+  const allModuleDeps = {};
+  await Promise.all(
     Array.from(pkgDeps).map(async pkgDep => {
-      const packageDir = await getPackageDir(globeDir, pkgDep, globePkg);
+      const { packageDir, extendingGlobeDir } = await getPackageDir(
+        globeDir,
+        pkgDep,
+        globePkg,
+      );
       const packageJSONPath = pathJoin(packageDir, 'package.json');
       const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
       const moduleDeps =
         (pkgJSON.globe && pkgJSON.globe.moduleDependencies) || [];
-      return moduleDeps;
+      const extendsGlobePkg =
+        extendingGlobeDir &&
+        JSON.parse(
+          await fs.readFile(pathJoin(extendingGlobeDir, 'package.json')),
+        );
+      const localGlobePkg = extendsGlobePkg ? extendsGlobePkg : globePkg;
+      moduleDeps.forEach(moduleDepName => {
+        if (!localGlobePkg.dependencies[moduleDepName]) {
+          throw new Error(
+            'Cannot find ' + moduleDepName + ' in the globe package.json!',
+          );
+        }
+        allModuleDeps[moduleDepName] =
+          localGlobePkg.dependencies[moduleDepName];
+      });
     }),
-  );
-  const allModuleDeps = new Set();
-  childPkgDeps.forEach(cPkgDeps =>
-    cPkgDeps.forEach(cPkgDep => allModuleDeps.add(cPkgDep)),
   );
   return allModuleDeps;
 };
@@ -199,24 +215,22 @@ const sync = async (appEnv, location, appName, appPkg, globeDir) => {
 
   const distPkgTemplate = await appEnv.getTemplatePkg(location);
 
+  const allModuleDeps = await getAllModuleDependencies(
+    globeDir,
+    appName,
+    globePkg,
+  );
+
   const distPkg = {
     ...distPkgTemplate,
     dependencies: {
       ...distPkgTemplate.dependencies,
       ...appPkg.dependencies,
+      ...allModuleDeps,
     },
   };
 
-  Array.from(
-    await getAllModuleDependencies(globeDir, appName, globePkg),
-  ).forEach(moduleDep => {
-    if (globePkg.dependencies[moduleDep] == null) {
-      throw new Error(
-        `Cannot find dependency "${moduleDep}" inside package.json for globe at ${globeDir}`,
-      );
-    }
-    distPkg.dependencies[moduleDep] = globePkg.dependencies[moduleDep];
-  });
+  // publicAssetDir
 
   await appEnv.applyPackage({
     location,
