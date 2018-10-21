@@ -49,40 +49,75 @@ const start = async ({ location }) => {
 };
 
 const deploy = async ({ appName, appPkg, location, globeDir }) => {
-  // this part isn't so generalized.. the app.yaml and secret serialization is all GAE specific
-  const appYamlPath = pathJoin(location, 'app.yaml');
-  const appConfig = yaml.safeLoad(await fs.readFile(appYamlPath));
-  const publicConfig = { _configType: 'public' };
-  const secretConfig = { _configType: 'secret' };
-  if (appPkg && appPkg.globe && appPkg.globe.publicBuildConfigVars) {
-    appPkg.globe.publicBuildConfigVars.forEach(varName => {
-      publicConfig[varName] = process.env[varName];
-    });
-  }
-  if (appPkg && appPkg.globe && appPkg.globe.secretBuildConfigVars) {
-    appPkg.globe.secretBuildConfigVars.forEach(varName => {
-      secretConfig[varName] = process.env[varName];
-    });
-  }
-  const newAppConfig = {
-    ...appConfig,
-    env_variables: {
-      ...appConfig.env_variables,
-      PUBLIC_CONFIG_JSON: JSON.stringify(publicConfig),
-      SECRET_CONFIG_JSON: JSON.stringify(secretConfig),
-    },
-  };
-  if (secretConfig.SQL_INSTANCE_CONNECTION_NAME) {
-    newAppConfig.beta_settings = {
-      cloud_sql_instances: secretConfig.SQL_INSTANCE_CONNECTION_NAME,
+  if (
+    appPkg.globe &&
+    appPkg.globe.envOptions &&
+    appPkg.globe.envOptions.deployEnv === 'GoogleAppEngine'
+  ) {
+    // this part isn't so generalized.. the app.yaml and secret serialization is all GAE specific
+    const appYamlPath = pathJoin(location, 'app.yaml');
+    const appConfig = yaml.safeLoad(await fs.readFile(appYamlPath));
+    const publicConfig = { _configType: 'public' };
+    const secretConfig = { _configType: 'secret' };
+    if (appPkg.globe && appPkg.globe.publicBuildConfigVars) {
+      appPkg.globe.publicBuildConfigVars.forEach(varName => {
+        publicConfig[varName] = process.env[varName];
+      });
+    }
+    if (appPkg.globe && appPkg.globe.secretBuildConfigVars) {
+      appPkg.globe.secretBuildConfigVars.forEach(varName => {
+        secretConfig[varName] = process.env[varName];
+      });
+    }
+    const newAppConfig = {
+      ...appConfig,
+      env_variables: {
+        ...appConfig.env_variables,
+        PUBLIC_CONFIG_JSON: JSON.stringify(publicConfig),
+        SECRET_CONFIG_JSON: JSON.stringify(secretConfig),
+      },
     };
+    if (secretConfig.SQL_INSTANCE_CONNECTION_NAME) {
+      newAppConfig.beta_settings = {
+        cloud_sql_instances: secretConfig.SQL_INSTANCE_CONNECTION_NAME,
+      };
+    }
+    await fs.writeFile(appYamlPath, yaml.safeDump(newAppConfig));
+    await spawn('gcloud', ['app', 'deploy', '-q'], {
+      cwd: location,
+      stdio: 'inherit',
+    });
+    return;
   }
-  await fs.writeFile(appYamlPath, yaml.safeDump(newAppConfig));
-  await spawn('gcloud', ['app', 'deploy', '-q'], {
-    cwd: location,
-    stdio: 'inherit',
-  });
-  return {};
+
+  if (
+    appPkg.globe &&
+    appPkg.globe.envOptions &&
+    appPkg.globe.envOptions.deployEnv === 'Heroku'
+  ) {
+    const spawnInBuildDir = async (cmd, args) => {
+      console.log('⌨️  ' + cmd + ' ' + args.join(' '));
+      return await spawn(cmd, args, { cwd: location, stdio: 'inherit' });
+    };
+    await spawnInBuildDir('git', ['init']);
+    await spawnInBuildDir('git', ['add', '.']);
+    await spawnInBuildDir('git', [
+      'commit',
+      '-am',
+      `Deploy on ${new Date().toUTCString()}`,
+    ]);
+    const herokuAppName =
+      (appPkg.globe.envOptions && appPkg.globe.envOptions.herokuAppName) ||
+      process.env.HEROKU_DEPLOY_APP ||
+      appName;
+    await spawnInBuildDir('heroku', ['git:remote', '--app', herokuAppName]);
+    await spawnInBuildDir('git', ['push', '-f', 'heroku', 'master']);
+    return;
+  }
+
+  throw new Error(
+    'Invalid pkg.globe.envOptions.deployEnv in "' + appName + '"!',
+  );
 };
 
 const build = async ({ appName, appPkg, location, globeDir }) => {
