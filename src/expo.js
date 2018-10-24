@@ -58,7 +58,6 @@ const init = async ({ appName, appPkg, location, globeDir }) => {
 };
 
 const start = async ({ appName, appPkg, location, globeDir }) => {
-  console.log('STARTING EXPO!', appName, appPkg, location, globeDir);
   await spawn('exp', ['start'], { cwd: location, stdio: 'inherit' });
 };
 
