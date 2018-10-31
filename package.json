@@ -1,5 +1,5 @@
 {
-  "name": "@aven-cloud/globe-tools",
+  "name": "@aven-cloud/aven-tools",
   "version": "0.1.0",
   "main": "globe.js",
   "bin": {
