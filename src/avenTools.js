@@ -5,33 +5,33 @@ const sane = require('sane');
 const homeDir = require('os').homedir();
 const spawn = require('@expo/spawn-async');
 
-const globeDir = process.cwd();
-const globeHomeDir = pathJoin(homeDir, '.globe');
-const globeStatePath = pathJoin(globeDir, '.globe.state.json');
+const srcDir = process.cwd();
+const avenHomeDir = pathJoin(homeDir, '.aven');
+const envStatePath = pathJoin(srcDir, '.aven-env-state.json');
 
-const extendOverride = process.env.GLOBE_LOCAL_EXTEND_OVERRIDE;
+const extendOverride = process.env.AVEN_SRC_EXTEND_OVERRIDE;
 if (extendOverride) {
   console.log(
-    `⚠️ - Using globe extendsGlobeModule from process.env.GLOBE_LOCAL_EXTEND_OVERRIDE (${extendOverride}). You are responsible for syncronization of the extended globe dir!`,
+    `⚠️ - Using AvenTools extendsSrcModule from process.env.AVEN_SRC_EXTEND_OVERRIDE (${extendOverride}). You are responsible for syncronization of the extended globe dir!`,
   );
 }
 
-const getPackageDir = async (globeDir, packageName, globePkg) => {
-  const extendsGlobeModule =
-    globePkg && globePkg.globe && globePkg.globe.extendsGlobeModule;
-  let packageDir = pathJoin(globeDir, packageName);
-  let extendingGlobeDir = null;
-  if (!(await fs.existsSync(packageDir)) && extendsGlobeModule) {
-    extendingGlobeDir =
-      extendOverride || pathJoin(globeDir, 'node_modules', extendsGlobeModule);
-    const extendsPkgDir = pathJoin(extendingGlobeDir, packageName);
+const getPackageDir = async (srcDir, packageName, globePkg) => {
+  const extendsSrcModule =
+    globePkg && globePkg.aven && globePkg.aven.extendsSrcModule;
+  let packageDir = pathJoin(srcDir, packageName);
+  let extendingSrcDir = null;
+  if (!(await fs.existsSync(packageDir)) && extendsSrcModule) {
+    extendingSrcDir =
+      extendOverride || pathJoin(srcDir, 'node_modules', extendsSrcModule);
+    const extendsPkgDir = pathJoin(extendingSrcDir, packageName);
     packageDir = extendsPkgDir;
   }
-  return { packageDir, extendingGlobeDir };
+  return { packageDir, extendingSrcDir };
 };
 
-const syncPackage = async (packageName, globeDir, destLocation, globePkg) => {
-  const { packageDir } = await getPackageDir(globeDir, packageName, globePkg);
+const syncPackage = async (packageName, srcDir, destLocation, globePkg) => {
+  const { packageDir } = await getPackageDir(srcDir, packageName, globePkg);
   const destPackage = pathJoin(destLocation, packageName);
   await spawn('rsync', [
     '-a',
@@ -44,14 +44,14 @@ const syncPackage = async (packageName, globeDir, destLocation, globePkg) => {
   ]);
 };
 
-const getAllGlobeDependencies = async (globeDir, packageName, globePkg) => {
-  const { packageDir } = await getPackageDir(globeDir, packageName, globePkg);
+const getAllSrcDependencies = async (srcDir, packageName, globePkg) => {
+  const { packageDir } = await getPackageDir(srcDir, packageName, globePkg);
   const packageJSONPath = pathJoin(packageDir, 'package.json');
   const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
-  const pkgDeps = (pkgJSON.globe && pkgJSON.globe.globeDependencies) || [];
+  const pkgDeps = (pkgJSON.aven && pkgJSON.aven.srcDependencies) || [];
   const childPkgDeps = await Promise.all(
     pkgDeps.map(async pkgDep => {
-      return await getAllGlobeDependencies(globeDir, pkgDep, globePkg);
+      return await getAllSrcDependencies(srcDir, pkgDep, globePkg);
     }),
   );
   const allPkgDeps = new Set(pkgDeps);
@@ -62,32 +62,28 @@ const getAllGlobeDependencies = async (globeDir, packageName, globePkg) => {
   return allPkgDeps;
 };
 
-const getAllModuleDependencies = async (globeDir, packageName, globePkg) => {
-  const pkgDeps = await getAllGlobeDependencies(
-    globeDir,
-    packageName,
-    globePkg,
-  );
+const getAllModuleDependencies = async (srcDir, packageName, globePkg) => {
+  const pkgDeps = await getAllSrcDependencies(srcDir, packageName, globePkg);
   const allModuleDeps = {};
   await Promise.all(
     Array.from(pkgDeps).map(async pkgDep => {
-      const { packageDir, extendingGlobeDir } = await getPackageDir(
-        globeDir,
+      const { packageDir, extendingSrcDir } = await getPackageDir(
+        srcDir,
         pkgDep,
         globePkg,
       );
       const packageJSONPath = pathJoin(packageDir, 'package.json');
       const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
       const moduleDeps =
-        (pkgJSON.globe && pkgJSON.globe.moduleDependencies) || [];
-      const extendsGlobePkg =
-        extendingGlobeDir &&
+        (pkgJSON.aven && pkgJSON.aven.moduleDependencies) || [];
+      const extendsSrcModulePkg =
+        extendingSrcDir &&
         JSON.parse(
-          await fs.readFile(pathJoin(extendingGlobeDir, 'package.json')),
+          await fs.readFile(pathJoin(extendingSrcDir, 'package.json')),
         );
-      const localGlobePkg = extendsGlobePkg ? extendsGlobePkg : globePkg;
+      const srcPkg = extendsSrcModulePkg ? extendsSrcModulePkg : globePkg;
       moduleDeps.forEach(moduleDepName => {
-        if (!localGlobePkg.dependencies[moduleDepName]) {
+        if (!srcPkg.dependencies[moduleDepName]) {
           throw new Error(
             'Cannot find ' +
               moduleDepName +
@@ -96,29 +92,24 @@ const getAllModuleDependencies = async (globeDir, packageName, globePkg) => {
               '!',
           );
         }
-        allModuleDeps[moduleDepName] =
-          localGlobePkg.dependencies[moduleDepName];
+        allModuleDeps[moduleDepName] = srcPkg.dependencies[moduleDepName];
       });
     }),
   );
   return allModuleDeps;
 };
 
-const getAllPublicAssetDirs = async (globeDir, packageName, globePkg) => {
-  const pkgDeps = await getAllGlobeDependencies(
-    globeDir,
-    packageName,
-    globePkg,
-  );
+const getAllPublicAssetDirs = async (srcDir, packageName, globePkg) => {
+  const pkgDeps = await getAllSrcDependencies(srcDir, packageName, globePkg);
   const allPublicAssetDirs = [];
   await Promise.all(
     Array.from(pkgDeps).map(async pkgDep => {
-      const { packageDir } = await getPackageDir(globeDir, pkgDep, globePkg);
+      const { packageDir } = await getPackageDir(srcDir, pkgDep, globePkg);
       const packageJSONPath = pathJoin(packageDir, 'package.json');
       const pkgJSON = JSON.parse(await fs.readFile(packageJSONPath));
-      if (pkgJSON.globe && pkgJSON.globe.publicAssetDir) {
+      if (pkgJSON.aven && pkgJSON.aven.publicAssetDir) {
         allPublicAssetDirs.push(
-          pathJoin(packageDir, pkgJSON.globe.publicAssetDir),
+          pathJoin(packageDir, pkgJSON.aven.publicAssetDir),
         );
       }
     }),
@@ -133,7 +124,7 @@ const globeEnvs = {
 };
 
 const getAppPackage = async appName => {
-  const appDir = pathJoin(globeDir, appName);
+  const appDir = pathJoin(srcDir, appName);
   const appPkgPath = pathJoin(appDir, 'package.json');
   let appPkg = null;
   try {
@@ -145,17 +136,17 @@ const getAppPackage = async appName => {
 };
 
 const getAppEnv = async (appName, appPkg) => {
-  const envName = appPkg && appPkg.globe && appPkg.globe.env;
+  const envName = appPkg && appPkg.aven && appPkg.aven.env;
   let envModule = globeEnvs[envName];
   if (!envModule) {
-    const envPath = pathJoin(globeDir, envName);
+    const envPath = pathJoin(srcDir, envName);
     if (!(await fs.exists(envPath))) {
       throw new Error(
         `Failed to load platform env "${envName}" as specified in package.json globe.env for "${appName}"`,
       );
     }
-    envModule = require(pathJoin(envPath, 'GlobeEnv.js'));
-    envModule.localGlobeEnv = envName;
+    envModule = require(pathJoin(envPath, 'AvenEnv.js'));
+    envModule.localEnv = envName;
   }
   envModule.name = envName;
   return envModule;
@@ -164,11 +155,11 @@ const getAppEnv = async (appName, appPkg) => {
 const readGlobeState = async () => {
   let state = {};
   try {
-    state = JSON.parse(await fs.readFile(globeStatePath));
-    if (state.globeDir !== globeDir) {
+    state = JSON.parse(await fs.readFile(envStatePath));
+    if (state.srcDir !== srcDir) {
       state = {};
-      console.log('Globe has moved! Removing old globe state..');
-      await fs.remove(globeStatePath);
+      console.log('Aven src has moved! Removing old state..');
+      await fs.remove(envStatePath);
     }
   } catch (e) {
     if (e.code !== 'ENOENT') {
@@ -178,16 +169,16 @@ const readGlobeState = async () => {
   return state;
 };
 
-const writeGlobeState = async state => {
+const writeAvenEnvState = async state => {
   const stateData = JSON.stringify(state);
-  await fs.writeFile(globeStatePath, stateData);
+  await fs.writeFile(envStatePath, stateData);
 };
 
 const initLocation = async (appName, appPkg, platform, appState) => {
-  const newLocation = pathJoin(homeDir, '.globe', appName + '_' + uuid());
+  const newLocation = pathJoin(avenHomeDir, appName + '_' + uuid());
   await fs.mkdirp(newLocation);
   await platform.init({
-    globeDir,
+    srcDir,
     appName,
     appPkg,
     location: newLocation,
@@ -199,7 +190,7 @@ const initLocation = async (appName, appPkg, platform, appState) => {
 };
 const getAppLocation = async (appName, appPkg, platform, appState) => {
   if (platform.runInPlace) {
-    return { ...appState, location: pathJoin(globeDir, platform.name) };
+    return { ...appState, location: pathJoin(srcDir, platform.name) };
   }
   if (!appState || !appState.location) {
     return await initLocation(appName, appPkg, platform, appState);
@@ -210,20 +201,16 @@ const getAppLocation = async (appName, appPkg, platform, appState) => {
   return appState;
 };
 
-const sync = async (appEnv, location, appName, appPkg, globeDir) => {
+const sync = async (appEnv, location, appName, appPkg, srcDir) => {
   const packageSourceDir = appEnv.getPackageSourceDir(location);
   const globePkg = JSON.parse(
-    await fs.readFile(pathJoin(globeDir, 'package.json')),
+    await fs.readFile(pathJoin(srcDir, 'package.json')),
   );
   await fs.mkdirp(packageSourceDir);
 
   const existingDirs = await fs.readdir(packageSourceDir);
 
-  const globeDepsSet = await getAllGlobeDependencies(
-    globeDir,
-    appName,
-    globePkg,
-  );
+  const globeDepsSet = await getAllSrcDependencies(srcDir, appName, globePkg);
   const globeDeps = Array.from(globeDepsSet);
   await Promise.all(
     existingDirs
@@ -235,14 +222,14 @@ const sync = async (appEnv, location, appName, appPkg, globeDir) => {
   );
   await Promise.all(
     globeDeps.map(async globeDep => {
-      await syncPackage(globeDep, globeDir, packageSourceDir, globePkg);
+      await syncPackage(globeDep, srcDir, packageSourceDir, globePkg);
     }),
   );
 
   const distPkgTemplate = await appEnv.getTemplatePkg(location);
 
   const allModuleDeps = await getAllModuleDependencies(
-    globeDir,
+    srcDir,
     appName,
     globePkg,
   );
@@ -256,7 +243,7 @@ const sync = async (appEnv, location, appName, appPkg, globeDir) => {
     },
   };
 
-  const assetDirs = await getAllPublicAssetDirs(globeDir, appName, globePkg);
+  const assetDirs = await getAllPublicAssetDirs(srcDir, appName, globePkg);
   const destAssetDir = pathJoin(location, 'public');
   await Promise.all(
     assetDirs.map(async assetDir => {
@@ -288,11 +275,11 @@ const runStart = async argv => {
         appState.location
       }`,
     );
-    return await sync(appEnv, appState.location, appName, appPkg, globeDir);
+    return await sync(appEnv, appState.location, appName, appPkg, srcDir);
   };
-  await writeGlobeState({
+  await writeAvenEnvState({
     ...state,
-    globeDir,
+    srcDir,
     apps: {
       ...state.apps,
       [appName]: appState,
@@ -300,7 +287,7 @@ const runStart = async argv => {
   });
   let syncState = await goSync();
 
-  const watcher = sane(globeDir, { watchman: true });
+  const watcher = sane(srcDir, { watchman: true });
 
   let extendedGlobeWatcher =
     extendOverride && sane(extendOverride, { watchman: true });
@@ -308,13 +295,13 @@ const runStart = async argv => {
   let syncTimeout = null;
   const scheduleSync = (filepath, root, stat) => {
     if (
-      appEnv.localGlobeEnv &&
-      filepath.substr(0, appEnv.localGlobeEnv.length) === appEnv.localGlobeEnv
+      appEnv.localEnv &&
+      filepath.substr(0, appEnv.localEnv.length) === appEnv.localEnv
     ) {
       return;
     }
     let shouldSync = false;
-    for (let globeDep of syncState.globeDeps) {
+    for (let globeDep of syncState.avenDeps) {
       if (filepath.substr(0, globeDep.length) === globeDep) {
         shouldSync = true;
       }
@@ -346,7 +333,7 @@ const runStart = async argv => {
   await Promise.all([
     new Promise(resolve => {
       watcher.on('ready', () => {
-        console.log(`🌐 👓 Watching ${globeDir} for changes`);
+        console.log(`🌐 👓 Watching ${srcDir} for changes`);
         resolve();
       });
     }),
@@ -364,7 +351,7 @@ const runStart = async argv => {
   ]);
 
   await appEnv.start({
-    globeDir,
+    srcDir,
     appName,
     appPkg,
     location: appState.location,
@@ -382,24 +369,20 @@ const runBuild = async argv => {
   let appState = state.apps && state.apps[appName];
   appState = await getAppLocation(appName, appPkg, appEnv, appState);
   const buildId = uuid();
-  const buildLocation = pathJoin(
-    homeDir,
-    '.globe',
-    appName + '_build_' + buildId,
-  );
+  const buildLocation = pathJoin(avenHomeDir, appName + '_build_' + buildId);
 
   await fs.mkdirp(buildLocation);
   await appEnv.init({
-    globeDir,
+    srcDir,
     appName,
     appPkg,
     location: buildLocation,
   });
 
-  await sync(appEnv, buildLocation, appName, appPkg, globeDir);
+  await sync(appEnv, buildLocation, appName, appPkg, srcDir);
 
   await appEnv.build({
-    globeDir,
+    srcDir,
     appName,
     appPkg,
     location: buildLocation,
@@ -416,31 +399,27 @@ const runDeploy = async argv => {
   let appState = state.apps && state.apps[appName];
   appState = await getAppLocation(appName, appPkg, appEnv, appState);
   const buildId = uuid();
-  const buildLocation = pathJoin(
-    homeDir,
-    '.globe',
-    appName + '_build_' + buildId,
-  );
+  const buildLocation = pathJoin(avenHomeDir, appName + '_build_' + buildId);
 
   await fs.mkdirp(buildLocation);
   await appEnv.init({
-    globeDir,
+    srcDir,
     appName,
     appPkg,
     location: buildLocation,
   });
 
-  await sync(appEnv, buildLocation, appName, appPkg, globeDir);
+  await sync(appEnv, buildLocation, appName, appPkg, srcDir);
 
   await appEnv.build({
-    globeDir,
+    srcDir,
     appName,
     appPkg,
     location: buildLocation,
   });
 
   await appEnv.deploy({
-    globeDir,
+    srcDir,
     appName,
     appPkg,
     location: buildLocation,
@@ -449,8 +428,8 @@ const runDeploy = async argv => {
   return { buildLocation };
 };
 const runClean = async () => {
-  await fs.remove(globeHomeDir);
-  await fs.remove(globeStatePath);
+  await fs.remove(avenHomeDir);
+  await fs.remove(envStatePath);
 };
 module.exports = {
   runStart,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const minimist = require('minimist');
-const { runClean, runStart, runBuild, runDeploy } = require('./src/globe');
+const { runClean, runStart, runBuild, runDeploy } = require('./src/avenTools');
 
 const logRespectfully = (argv, logStr) => {
   if (!argv.q) {
@@ -24,48 +24,48 @@ const runCLI = async argv => {
   const command = argv._[0];
   switch (command) {
     case 'clean': {
-      logRespectfully(argv, '🌐 Globe Clean 🔥');
+      logRespectfully(argv, '🌐 Aven Clean 🔥');
       logRespectfully(
         argv,
-        'Cleaning all globe apps and state. This will not touch your working directory, except for the local .globe.state.json file, which should be ignored by git.',
+        'Cleaning all Aven apps and state. This will not touch your working directory, except for the local .aven-env-state.json file, which should be ignored by git.',
       );
       return runClean(argv);
     }
     case 'start': {
-      logRespectfully(argv, '🌐 Globe Start 🛠 ');
+      logRespectfully(argv, '🌐 Aven Start 🛠 ');
       const result = await runStart(argv);
       logResult(argv, result);
       return;
     }
     case 'build': {
-      logRespectfully(argv, '🌐 Globe Build 🗜');
+      logRespectfully(argv, '🌐 Aven Build 🗜');
       const result = await runBuild(argv);
       logResult(
         argv,
         result,
-        `🌐 Globe Build Complete 🗜\n${result.buildLocation}`,
+        `🌐 Aven Build Complete 🗜\n${result.buildLocation}`,
       );
       return;
     }
     case 'deploy': {
-      logRespectfully(argv, '🌐 Globe Deploy 🚀');
+      logRespectfully(argv, '🌐 Aven Deploy 🚀');
       const result = await runDeploy(argv);
       logResult(argv, result, '');
       return;
     }
     case 'test': {
-      logRespectfully(argv, '🌐 Globe Test 💡  (coming soon');
+      logRespectfully(argv, '🌐 Aven Test 💡  (coming soon');
       return;
     }
     case 'help':
     default: {
-      console.log('🌐 Globe CLI 🌐');
+      console.log('🌐 Aven CLI 🌐');
       console.log('Usage:');
       console.log(
-        'globe start [appName] (launch the dev environment for this app)',
+        'aven start [appName] (launch the dev environment for this app)',
       );
-      console.log('globe build [appName] (run a build for this app)');
-      console.log('globe clear (wipe out all derived app data)');
+      console.log('aven build [appName] (run a build for this app)');
+      console.log('aven clear (wipe out all derived app data)');
     }
   }
 };
