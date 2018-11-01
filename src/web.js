@@ -16,7 +16,7 @@ const getTemplatePkg = async () => {
 const applyPackage = async ({ location, appName, appPkg, distPkg }) => {
   const serverAppPath = pathJoin(location, 'src', 'server.js');
   const serverAppFileData = `
-import Server from './sync/${appName}/${appPkg.globe.envOptions.mainServer}';
+import Server from './sync/${appName}/${appPkg.aven.envOptions.mainServer}';
 
 export default Server;
 `;
@@ -25,7 +25,7 @@ export default Server;
   const clientAppPath = pathJoin(location, 'src', 'client.js');
   const clientAppFileData = `
 import startClient from './sync/${appName}/${
-    appPkg.globe.envOptions.mainClient
+    appPkg.aven.envOptions.mainClient
   }';
 
 startClient();
@@ -48,24 +48,24 @@ const start = async ({ location }) => {
   return {};
 };
 
-const deploy = async ({ appName, appPkg, location, globeDir }) => {
+const deploy = async ({ appName, appPkg, location, srcDir }) => {
   if (
-    appPkg.globe &&
-    appPkg.globe.envOptions &&
-    appPkg.globe.envOptions.deployEnv === 'GoogleAppEngine'
+    appPkg.aven &&
+    appPkg.aven.envOptions &&
+    appPkg.aven.envOptions.deployEnv === 'GoogleAppEngine'
   ) {
     // this part isn't so generalized.. the app.yaml and secret serialization is all GAE specific
     const appYamlPath = pathJoin(location, 'app.yaml');
     const appConfig = yaml.safeLoad(await fs.readFile(appYamlPath));
     const publicConfig = { _configType: 'public' };
     const secretConfig = { _configType: 'secret' };
-    if (appPkg.globe && appPkg.globe.publicBuildConfigVars) {
-      appPkg.globe.publicBuildConfigVars.forEach(varName => {
+    if (appPkg.aven && appPkg.aven.publicBuildConfigVars) {
+      appPkg.aven.publicBuildConfigVars.forEach(varName => {
         publicConfig[varName] = process.env[varName];
       });
     }
-    if (appPkg.globe && appPkg.globe.secretBuildConfigVars) {
-      appPkg.globe.secretBuildConfigVars.forEach(varName => {
+    if (appPkg.aven && appPkg.aven.secretBuildConfigVars) {
+      appPkg.aven.secretBuildConfigVars.forEach(varName => {
         secretConfig[varName] = process.env[varName];
       });
     }
@@ -92,8 +92,8 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
 
   if (
     appPkg.globe &&
-    appPkg.globe.envOptions &&
-    appPkg.globe.envOptions.deployEnv === 'Heroku'
+    appPkg.aven.envOptions &&
+    appPkg.aven.envOptions.deployEnv === 'Heroku'
   ) {
     const spawnInBuildDir = async (cmd, args) => {
       console.log('⌨️  ' + cmd + ' ' + args.join(' '));
@@ -107,7 +107,7 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
       `Deploy on ${new Date().toUTCString()}`,
     ]);
     const herokuAppName =
-      (appPkg.globe.envOptions && appPkg.globe.envOptions.herokuAppName) ||
+      (appPkg.aven.envOptions && appPkg.aven.envOptions.herokuAppName) ||
       process.env.HEROKU_DEPLOY_APP ||
       appName;
     await spawnInBuildDir('heroku', ['git:remote', '--app', herokuAppName]);
@@ -116,11 +116,11 @@ const deploy = async ({ appName, appPkg, location, globeDir }) => {
   }
 
   throw new Error(
-    'Invalid pkg.globe.envOptions.deployEnv in "' + appName + '"!',
+    'Invalid pkg.aven.envOptions.deployEnv in "' + appName + '"!',
   );
 };
 
-const build = async ({ appName, appPkg, location, globeDir }) => {
+const build = async ({ appName, appPkg, location, srcDir }) => {
   const razzleLocation = pathJoin(
     location,
     'node_modules/razzle/bin/razzle.js',

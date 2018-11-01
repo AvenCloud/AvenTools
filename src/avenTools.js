@@ -210,19 +210,19 @@ const sync = async (appEnv, location, appName, appPkg, srcDir) => {
 
   const existingDirs = await fs.readdir(packageSourceDir);
 
-  const globeDepsSet = await getAllSrcDependencies(srcDir, appName, globePkg);
-  const globeDeps = Array.from(globeDepsSet);
+  const srcDepsSet = await getAllSrcDependencies(srcDir, appName, globePkg);
+  const srcDeps = Array.from(srcDepsSet);
   await Promise.all(
     existingDirs
-      .filter(testPkgName => !globeDepsSet.has(testPkgName))
+      .filter(testPkgName => !srcDepsSet.has(testPkgName))
       .map(async pkgToRemove => {
         const pkgToRemovePath = pathJoin(packageSourceDir, pkgToRemove);
         await fs.remove(pkgToRemovePath);
       }),
   );
   await Promise.all(
-    globeDeps.map(async globeDep => {
-      await syncPackage(globeDep, srcDir, packageSourceDir, globePkg);
+    srcDeps.map(async srcDep => {
+      await syncPackage(srcDep, srcDir, packageSourceDir, globePkg);
     }),
   );
 
@@ -258,7 +258,7 @@ const sync = async (appEnv, location, appName, appPkg, srcDir) => {
     distPkg,
   });
 
-  return { globeDeps };
+  return { srcDeps };
 };
 
 const runStart = async argv => {
@@ -301,8 +301,8 @@ const runStart = async argv => {
       return;
     }
     let shouldSync = false;
-    for (let globeDep of syncState.avenDeps) {
-      if (filepath.substr(0, globeDep.length) === globeDep) {
+    for (let srcDep of syncState.srcDeps) {
+      if (filepath.substr(0, srcDep.length) === srcDep) {
         shouldSync = true;
       }
     }
@@ -333,7 +333,7 @@ const runStart = async argv => {
   await Promise.all([
     new Promise(resolve => {
       watcher.on('ready', () => {
-        console.log(`🌐 👓 Watching ${srcDir} for changes`);
+        console.log(`🌐 👓 Watching ${srcDir} for changes..`);
         resolve();
       });
     }),
@@ -343,7 +343,7 @@ const runStart = async argv => {
       }
       extendedGlobeWatcher.on('ready', () => {
         console.log(
-          `🌐 👓 Watching extended globe dir ${extendOverride} for changes`,
+          `🌐 👓 Also watching extended src dir ${extendOverride} for changes..`,
         );
         resolve();
       });

@@ -42,7 +42,7 @@ export default App;`;
       supportsTablet: true,
     },
   };
-  const appExpoConfig = appPkg.globe.envOptions && appPkg.globe.envOptions.app;
+  const appExpoConfig = appPkg.aven.envOptions && appPkg.aven.envOptions.app;
   const expoConfig = { ...defaultExpoConfig, ...appExpoConfig };
   const appJsonData = JSON.stringify({ expo: expoConfig }, null, 2);
   await fs.writeFile(pathJoin(location, 'app.json'), appJsonData);
@@ -53,11 +53,11 @@ export default App;`;
   await spawn('yarn', { cwd: location, stdio: 'inherit' });
 };
 
-const init = async ({ appName, appPkg, location, globeDir }) => {
+const init = async ({ appName, appPkg, location, srcDir }) => {
   await fs.copy(pathJoin(protoPath), location);
 };
 
-const start = async ({ appName, appPkg, location, globeDir }) => {
+const start = async ({ appName, appPkg, location, srcDir }) => {
   await spawn('exp', ['start'], { cwd: location, stdio: 'inherit' });
 };
 

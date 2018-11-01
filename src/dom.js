@@ -26,12 +26,12 @@ export default App;`;
   await spawn('yarn', { cwd: location, stdio: 'inherit' });
 };
 
-const init = async ({ appName, appPkg, location, globeDir }) => {
+const init = async ({ appName, appPkg, location, srcDir }) => {
   await fs.mkdirp(location);
   await fs.copy(pathJoin(protoPath), location);
 };
 
-const start = async ({ appName, appPkg, location, globeDir }) => {
+const start = async ({ appName, appPkg, location, srcDir }) => {
   await spawn('yarn', ['start'], { cwd: location, stdio: 'inherit' });
 };
 
